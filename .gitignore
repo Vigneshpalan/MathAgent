@@ -1,0 +1,4 @@
+pd2/src/pd2_env/
+__pycache__/
+*.pyc
+.env

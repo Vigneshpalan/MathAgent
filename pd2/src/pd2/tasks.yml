@@ -1,0 +1,13 @@
+tasks:
+  - id: research_task
+    description: "Solve the math problem: {{topic}}. Provide step-by-step reasoning and a final answer."
+    expected_output: "A dictionary with keys: reasoning, answer, source."
+    agent: researcher
+
+  - id: reporting_task
+    description: "Format the solution for the math problem '{{topic}}' into a clear, concise report."
+    expected_output: "A well-formatted markdown report with the solution steps and the final boxed answer."
+    agent: reporting_analyst
+    depends_on: [research_task]
+    context: [research_task]
+    output_file: report.md

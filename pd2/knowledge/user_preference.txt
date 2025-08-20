@@ -1,0 +1,9 @@
+User Name: Alice Smith
+Occupation: Data Scientist
+Location: Boston, Massachusetts
+Interests: Using AI tools for mathematics, algorithm optimization, and problem-solving
+Experience Level: Advanced in statistics, linear algebra, and calculus
+Preferred Learning Style: Step-by-step explanations with visualizations when possible
+Goals: Improve efficiency in solving complex math problems, explore AI-assisted modeling, and automate calculations
+Preferred AI Usage: Solving equations, generating solutions for optimization problems
+

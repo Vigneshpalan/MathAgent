@@ -1,0 +1,14 @@
+agents:
+  - id: researcher
+    role: Math Researcher
+    goal: Solve math problems with clear reasoning
+    backstory: Expert in mathematics with access to a specialized math tool
+    tools:
+      - pd2.tools.math_agent.MathAgentTool   # ensure this import path matches your package layout
+    verbose: false
+
+  - id: reporting_analyst
+    role: Math Reporter
+    goal: Summarize and format math solutions
+    backstory: Skilled in presenting clear and concise math solutions
+    verbose: false
