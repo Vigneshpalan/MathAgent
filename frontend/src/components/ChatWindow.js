@@ -4,10 +4,22 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 import "./ChatWindow.css";
 
-// Render a line with headers and LaTeX
+// Renders step reasoning, removes **, handles LaTeX expressions and headers.
 const renderMarkdownLine = (line, i) => {
-  const cleanedLine = line.replace(/<<.*?>>/g, "").trim();
+  let cleanedLine = line.trim();
   if (!cleanedLine) return null;
+
+  // Remove ** bold markers from the line
+  cleanedLine = cleanedLine.replace(/\*\*/g, "");
+
+  // Convert <<...>> safely into LaTeX $$...$$
+  cleanedLine = cleanedLine.replace(/<<([^>]+)>>/g, (match, content) => {
+    const cleanContent = content
+      .replace(/<<.*?>>/g, "")
+      .trim()
+      .replace(/[^0-9+\-*/().\s]/g, "");
+    return cleanContent ? `$$${cleanContent}$$` : match;
+  });
 
   // Headers
   if (cleanedLine.startsWith("#### ")) return <h4 key={i}>{cleanedLine.replace("#### ", "")}</h4>;
@@ -15,25 +27,25 @@ const renderMarkdownLine = (line, i) => {
   if (cleanedLine.startsWith("## ")) return <h2 key={i}>{cleanedLine.replace("## ", "")}</h2>;
   if (cleanedLine.startsWith("# ")) return <h1 key={i}>{cleanedLine.replace("# ", "")}</h1>;
 
-  // LaTeX rendering
+  // LaTeX rendering with fallback
   const parts = cleanedLine.split(/(\$\$.*?\$\$)/g);
   return (
     <div key={i}>
       {parts.map((part, j) => {
         if (part.startsWith("$$") && part.endsWith("$$")) {
+          let latexContent = part.slice(2, -2).trim();
+          if (!latexContent) return null;
           try {
-            const latexContent = part.slice(2, -2).trim();
-            if (!latexContent) return null;
             return (
               <span
                 key={j}
                 dangerouslySetInnerHTML={{
-                  __html: katex.renderToString(latexContent, { throwOnError: false }),
+                  __html: katex.renderToString(latexContent, { throwOnError: false, displayMode: true }),
                 }}
               />
             );
           } catch (e) {
-            return <span key={j}>{part}</span>;
+            return <span key={j}>{latexContent}</span>;
           }
         }
         return <span key={j}>{part}</span>;
@@ -71,26 +83,42 @@ const ChatWindow = () => {
     setLoading(true);
 
     try {
-      const res = await axios.post("http://localhost:8000/ask", { query: input });
-      const reasoningText = res.data.reasoning || "";
-      const finalAnswer = res.data.answer || "";
+      const res = await Promise.race([
+        axios.post("http://localhost:8000/ask", { query: input }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Request timed out")), 10000)
+        ),
+      ]);
 
-      // Take first non-empty line
-      const firstAnswerLine = finalAnswer.split("\n").find((line) => line.trim()) || "";
+      const reasoningText = res.data.reasoning || "No reasoning available.";
+      let finalAnswer = res.data.answer || "";
+
+      // If final answer is purely numeric, show as plain text
+      if (/^[-+]?[0-9]*\.?[0-9]+$/.test(finalAnswer.trim())) {
+        finalAnswer = finalAnswer.trim();
+      } else {
+        // Extract number from reasoning if missing or not numeric
+        const numMatch = reasoningText.match(/[-+]?[0-9]*\.?[0-9]+/g);
+        if (numMatch && numMatch.length > 0) {
+          finalAnswer = numMatch[numMatch.length - 1];
+        }
+      }
 
       const botMsg = {
         sender: "bot",
         reasoning: reasoningText,
-        finalAnswer: firstAnswerLine,
-        source: res.data.source,
+        finalAnswer,
+        source: res.data.source || "Unknown",
       };
-
       setMessages((prev) => [...prev, botMsg]);
     } catch (err) {
-      console.error(err);
       setMessages((prev) => [
         ...prev,
-        { sender: "bot", text: "⚠️ Error contacting server.", source: "Error" },
+        {
+          sender: "bot",
+          text: `⚠️ Error: ${err.response?.data?.error || err.message || "Server issue"}`,
+          source: "Error",
+        },
       ]);
     } finally {
       setLoading(false);
@@ -100,17 +128,15 @@ const ChatWindow = () => {
   const handleFeedback = async (msgIndex, correct, correctedSolution = "") => {
     const botMsg = messages[msgIndex];
     const userMsg = messages[msgIndex - 1] || { text: "" };
-
     try {
-      await axios.post("http://localhost:8000/feedback", {
+      const res = await axios.post("http://localhost:8000/feedback", {
         query: userMsg.text,
         response: botMsg.finalAnswer || botMsg.text,
         correct,
         corrected_solution: correctedSolution,
       });
-      setToast("✅ Feedback submitted!");
-    } catch (err) {
-      console.error(err);
+      setToast(res.data.success ? "✅ Feedback submitted!" : `⚠️ ${res.data.error || "Feedback failed"}`);
+    } catch {
       setToast("⚠️ Error submitting feedback.");
     }
   };
@@ -132,52 +158,46 @@ const ChatWindow = () => {
   return (
     <div className="app-wrapper">
       {toast && <div className="toast-message">{toast}</div>}
-
       <div className="chat-wrapper">
         <div className="chat-header">MathAgent</div>
-
         <div className="chat-messages">
           {messages.map((msg, idx) => (
             <div key={idx} className={`message ${msg.sender}`}>
               <div className="message-text">
                 {msg.sender === "bot" && msg.reasoning && (
                   <div className="reasoning">
-                    {renderMarkdownLine(
-                      msg.reasoning.split("\n").find((line) => line.trim()) || "",
-                      0
-                    )}
+                    {msg.reasoning.split("\n").map((line, i) => renderMarkdownLine(line, i))}
                   </div>
                 )}
-
                 {msg.sender === "bot" && msg.finalAnswer && (
                   <div className="final-answer">
                     ✅ Final Answer:{" "}
-                    {/^[-+0-9*/().\s]+$/.test(msg.finalAnswer.replace(/\$\$/g, "").trim()) ? (
-                      // Render math with KaTeX
-                      <span
-                        dangerouslySetInnerHTML={{
-                          __html: katex.renderToString(
-                            msg.finalAnswer.replace(/\$\$/g, "").trim(),
-                            { throwOnError: false }
-                          ),
-                        }}
-                      />
-                    ) : (
-                      // Render text as-is
-                      <span>{msg.finalAnswer.replace(/^\d+[:.]?\s*/, "").trim()}</span>
-                    )}
+                    {(() => {
+                      const ans = msg.finalAnswer.trim();
+                      if (/^[-+]?[0-9]*\.?[0-9]+$/.test(ans)) {
+                        return <span>{ans}</span>;
+                      }
+                      try {
+                        return (
+                          <span
+                            dangerouslySetInnerHTML={{
+                              __html: katex.renderToString(ans, { throwOnError: false }),
+                            }}
+                          />
+                        );
+                      } catch {
+                        return <span>{ans}</span>;
+                      }
+                    })()}
                   </div>
                 )}
-
                 {msg.sender === "user" && <div>{msg.text}</div>}
               </div>
-
               {msg.sender === "bot" && msg.source && (
                 <span className={`source-badge source-${msg.source.replace("/", "-")}`}>
                   {msg.source}
                 </span>
               )}
-
               {msg.sender === "bot" &&
                 !["Guardrail", "Error"].includes(msg.source) && (
                   <div className="feedback-buttons">
@@ -187,7 +207,6 @@ const ChatWindow = () => {
                 )}
             </div>
           ))}
-
           {loading && (
             <div className="message bot">
               <i>MathAgent is thinking...</i>
@@ -195,7 +214,6 @@ const ChatWindow = () => {
           )}
           <div ref={messagesEndRef} style={{ height: 0, margin: 0, padding: 0 }} />
         </div>
-
         <div className="chat-input">
           <input
             type="text"
@@ -210,7 +228,6 @@ const ChatWindow = () => {
           </button>
         </div>
       </div>
-
       {modal.open && (
         <div className="modal-overlay">
           <div className="modal">

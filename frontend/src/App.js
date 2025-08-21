@@ -3,7 +3,7 @@ import ChatWindow from "./components/ChatWindow";
 
 function App() {
   return (
-    <div>
+    <div style={{ height: "100%", width: "100%" }}>
       <ChatWindow />
     </div>
   );
