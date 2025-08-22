@@ -44,11 +44,7 @@ The frontend has since been refined for a smoother and more interactive user exp
 ### Screenshot 4 – Error Handling Demo  
 ![Screenshot 4](https://github.com/Vigneshpalan/MathAgent/blob/master/Screenshot%202025-08-19%20153313.png)  
 
-### Screenshot 5 – Interactive Workflow View  
-![Screenshot 5](https://github.com/Vigneshpalan/MathAgent/blob/master/Screenshot%202025-08-19%20153809.png)  
 
-### Screenshot 6 – Dashboard Overview  
-![Screenshot 6](https://github.com/Vigneshpalan/MathAgent/blob/master/Screenshot%202025-08-19%20153809.png)  
 
 
 Contributing Contributions are welcome! Please fork the repository, make your changes, and submit a pull request.
